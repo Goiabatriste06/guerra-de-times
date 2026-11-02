@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Guerra de Times</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#05050c;overflow:hidden;font-family:system-ui,"Segoe UI",Roboto,sans-serif;color:#fff}
+  #wrap{height:100%;display:flex;align-items:center;justify-content:center}
+  canvas{width:min(100vw,calc(100vh * 9 / 16));height:auto;display:block;background:#0b0b18}
+
+  #gear{position:fixed;left:12px;top:12px;z-index:30;width:46px;height:46px;border-radius:50%;border:0;background:#000a;color:#fff;font-size:22px;cursor:pointer;transition:opacity .4s}
+  #gear.hide{opacity:0}
+  body.clean #gear{display:none}
+  #panel{position:fixed;left:0;top:0;bottom:0;width:350px;max-width:92vw;background:#12121fee;backdrop-filter:blur(6px);z-index:20;overflow-y:auto;padding:14px 16px 40px;transform:translateX(-105%);transition:transform .25s;border-right:1px solid #ffffff1a}
+  #panel.open{transform:none}
+  #panel h2{margin:4px 0 2px;font-size:18px}
+  #panel h3{margin:18px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#9aa4ff}
+  #panel label{display:block;font-size:12px;color:#b9bdd6;margin:8px 0 3px}
+  #panel input[type=text],#panel input[type=number],#panel select{width:100%;padding:8px 9px;border-radius:7px;border:1px solid #ffffff22;background:#1c1c30;color:#fff;font-size:14px}
+  #panel input[type=color]{width:46px;height:34px;padding:0;border:0;background:none;cursor:pointer}
+  #panel .row{display:flex;gap:8px;align-items:flex-end}
+  #panel .row>div{flex:1}
+  #panel .chk{display:flex;align-items:center;gap:8px;margin:7px 0;font-size:13px;color:#e8e9f5}
+  #panel button{padding:8px 10px;border:0;border-radius:7px;background:#34345f;color:#fff;cursor:pointer;font-size:13px}
+  #panel button:hover{background:#4a4a8c}
+  #panel button.pri{background:#3b6cff}
+  #panel button.dng{background:#7a2a38}
+  #panel .btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  #panel .btns button{flex:1 1 auto}
+  .photoBox{display:flex;align-items:center;gap:10px;margin-top:6px}
+  .photoBox img{width:54px;height:54px;border-radius:50%;object-fit:cover;background:#2a2a45;border:2px solid #ffffff33}
+  .photoBox .btns{margin:0;flex:1}
+  #panel small{color:#8b8fad;display:block;margin-top:6px;line-height:1.4}
+  #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#000d;padding:9px 16px;border-radius:8px;font-size:14px;z-index:40;opacity:0;transition:opacity .3s;pointer-events:none}
+</style>
+</head>
+<body>
+<button id="gear" title="Editar (E)">⚙️</button>
+<div id="wrap"><canvas id="c" width="720" height="1280"></canvas></div>
+<div id="toast"></div>
+
+<div id="panel">
+  <h2>⚙️ Editor da live</h2>
+  <small>Tudo que você muda aparece na hora. Fecha com E ou no ⚙️. Dica: use <b>?clean=1</b> na URL pra esconder o botão.</small>
+
+  <h3>Geral</h3>
+  <label>Título</label><input type="text" data-k="title">
+  <label>Subtítulo</label><input type="text" data-k="subtitle">
+
+  <h3 id="h0">Time 1 (esquerda)</h3>
+  <label>Nome</label><input type="text" data-k="teams.0.name">
+  <div class="row">
+    <div><label>Emoji (sem foto)</label><input type="text" data-k="teams.0.emoji"></div>
+    <div><label>Comando</label><input type="text" data-k="teams.0.cmd"></div>
+    <div style="flex:0 0 52px"><label>Cor</label><input type="color" data-k="teams.0.color"></div>
+  </div>
+  <div class="photoBox">
+    <img id="pv0" alt="">
+    <div class="btns">
+      <button onclick="pickPhoto(0)">📷 Foto</button>
+      <button class="dng" onclick="clearPhoto(0)">Remover</button>
+    </div>
+  </div>
+
+  <h3 id="h1">Time 2 (direita)</h3>
+  <label>Nome</label><input type="text" data-k="teams.1.name">
+  <div class="row">
+    <div><label>Emoji (sem foto)</label><input type="text" data-k="teams.1.emoji"></div>
+    <div><label>Comando</label><input type="text" data-k="teams.1.cmd"></div>
+    <div style="flex:0 0 52px"><label>Cor</label><input type="color" data-k="teams.1.color"></div>
+  </div>
+  <div class="photoBox">
+    <img id="pv1" alt="">
+    <div class="btns">
+      <button onclick="pickPhoto(1)">📷 Foto</button>
+      <button class="dng" onclick="clearPhoto(1)">Remover</button>
+    </div>
+  </div>
+  <input type="file" id="photoIn" accept="image/*" style="display:none">
+
+  <h3>Regras</h3>
+  <div class="row">
+    <div><label>Melhor de</label>
+      <select data-k="bestOf" data-num="1"><option>1</option><option>3</option><option>5</option><option>7</option></select></div>
+    <div><label>Tempo do round (s)</label><input type="number" min="20" max="600" data-k="roundTime"></div>
+  </div>
+  <div class="row">
+    <div><label>Pontos pra vencer</label><input type="number" min="10" max="2000" data-k="target"></div>
+    <div><label>Lobby (s)</label><input type="number" min="3" max="120" data-k="lobby"></div>
+  </div>
+  <div class="row">
+    <div><label>Pts / comentário</label><input type="number" step="0.1" data-k="pComment"></div>
+    <div><label>Pts / curtida</label><input type="number" step="0.05" data-k="pLike"></div>
+  </div>
+  <div class="row">
+    <div><label>Pts / diamante</label><input type="number" step="0.1" data-k="pGiftDia"></div>
+    <div><label>Pts seguir</label><input type="number" step="1" data-k="pFollow"></div>
+    <div><label>Pts compart.</label><input type="number" step="1" data-k="pShare"></div>
+  </div>
+  <label class="chk"><input type="checkbox" data-k="balance"> Equilibrar times (time menor ganha bônus)</label>
+  <label class="chk"><input type="checkbox" data-k="auto"> Quem não escolheu entra no time menor</label>
+  <label class="chk"><input type="checkbox" data-k="fury"> Modo Fúria (x2 pro time perdendo)</label>
+
+  <h3>Presets</h3>
+  <label>Salvos</label>
+  <select id="presetSel"></select>
+  <label>Nome do preset</label>
+  <input type="text" id="presetName" placeholder="ex: Dexter × Mentalista">
+  <div class="btns">
+    <button class="pri" onclick="presetSave()">💾 Salvar</button>
+    <button onclick="presetLoad()">📂 Carregar</button>
+    <button class="dng" onclick="presetDelete()">🗑 Apagar</button>
+  </div>
+  <div class="btns">
+    <button onclick="presetExport()">⬇ Exportar</button>
+    <button onclick="document.getElementById('presetIn').click()">⬆ Importar</button>
+  </div>
+  <input type="file" id="presetIn" accept="application/json" style="display:none">
+  <small>Os presets guardam nomes, cores, fotos, comandos e regras. Ficam salvos neste navegador; use Exportar pra fazer backup ou levar pra outro PC.</small>
+
+  <h3>Partida</h3>
+  <div class="btns">
+    <button onclick="restartMatch()">🔄 Reiniciar partida</button>
+    <button onclick="skipPhase()">⏭ Pular fase</button>
+    <button class="dng" onclick="resetLive()">Zerar placar da live</button>
+  </div>
+
+  <h3>Teste</h3>
+  <div class="btns">
+    <button onclick="Test.viewers(24)">+24 espectadores</button>
+    <button onclick="Test.auto()" id="btnAuto">Chat automático: OFF</button>
+    <button onclick="Test.gift()">🎁 Presente</button>
+    <button onclick="Test.likes()">❤️ Curtidas</button>
+  </div>
+</div>
+
+<script>
+/* ============================  CONFIG & PRESETS  ============================ */
+const qs = new URLSearchParams(location.search);
+if (qs.get('clean')) document.body.classList.add('clean');
+const SP = +qs.get('speed') || 1;
+const WS_URL = qs.get('ws') || 'ws://localhost:21213/';   // WebSocket do TikFinity
+
+const BASE = { bestOf: 3, roundTime: 90, target: 80, lobby: 20,
+  pComment: 1, pLike: 0.2, pGiftDia: 0.5, pFollow: 5, pShare: 3,
+  balance: true, auto: true, fury: true };
+const DEFAULT_PRESETS = {
+  'Azul × Vermelho': { ...BASE, title: 'BATALHA DE TIMES', subtitle: 'Escolha seu lado e puxe a corda!',
+    teams: [{ name: 'Time Azul', color: '#2f7bff', emoji: '🔵', cmd: 'azul', photo: '' },
+            { name: 'Time Vermelho', color: '#ff3b4e', emoji: '🔴', cmd: 'vermelho', photo: '' }] },
+  'Dexter × Mentalista': { ...BASE, title: 'DEXTER × MENTALISTA', subtitle: 'Qual mente vence essa guerra?',
+    teams: [{ name: 'Time Dexter', color: '#d6283a', emoji: '🔪', cmd: 'dexter', photo: '' },
+            { name: 'Time Mentalista', color: '#2f7bff', emoji: '🧠', cmd: 'mentalista', photo: '' }] }
+};
+const clone = o => JSON.parse(JSON.stringify(o));
+function mergeCfg(c) {
+  const d = clone(DEFAULT_PRESETS['Azul × Vermelho']);
+  const out = Object.assign(d, c || {});
+  out.teams = [0, 1].map(i => Object.assign({}, d.teams[i], (c && c.teams && c.teams[i]) || {}));
+  return out;
+}
+function lsGet(k, def) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : def; } catch (e) { return def; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { toast('⚠️ Não deu pra salvar (foto grande demais?)'); return false; } }
+
+let cfg = mergeCfg(lsGet('gt_cfg', null));
+let presets = lsGet('gt_presets', null);
+if (!presets || !Object.keys(presets).length) { presets = clone(DEFAULT_PRESETS); lsSet('gt_presets', presets); }
+let liveWins = lsGet('gt_live', [0, 0]);
+
+/* ============================  EDITOR  ============================ */
+const $ = id => document.getElementById(id);
+const getPath = (o, p) => p.split('.').reduce((a, k) => a && a[k], o);
+function setPath(o, p, v) { const ks = p.split('.'); const last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; }
+const persist = () => lsSet('gt_cfg', cfg);
+
+document.querySelectorAll('[data-k]').forEach(el => {
+  el.addEventListener('input', () => {
+    let v = el.type === 'checkbox' ? el.checked : el.value;
+    if (el.type === 'number' || el.dataset.num) v = +v || 0;
+    setPath(cfg, el.dataset.k, v); persist();
+    if (el.dataset.k.endsWith('.name')) syncHeads();
+  });
+});
+function syncHeads() { $('h0').textContent = '🅰 ' + (cfg.teams[0].name || 'Time 1'); $('h1').textContent = '🅱 ' + (cfg.teams[1].name || 'Time 2'); }
+function syncForm() {
+  document.querySelectorAll('[data-k]').forEach(el => {
+    const v = getPath(cfg, el.dataset.k);
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  });
+  [0, 1].forEach(i => { const im = $('pv' + i); im.src = cfg.teams[i].photo || ''; im.style.visibility = cfg.teams[i].photo ? 'visible' : 'hidden'; });
+  syncHeads();
+}
+let photoTarget = 0;
+function pickPhoto(i) { photoTarget = i; $('photoIn').value = ''; $('photoIn').click(); }
+function clearPhoto(i) { cfg.teams[i].photo = ''; persist(); syncForm(); }
+$('photoIn').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const im = new Image();
+    im.onload = () => {
+      const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+      const g = c.getContext('2d'), m = Math.min(im.width, im.height);
+      g.drawImage(im, (im.width - m) / 2, (im.height - m) / 2, m, m, 0, 0, S, S);   // recorte quadrado central
+      cfg.teams[photoTarget].photo = c.toDataURL('image/jpeg', .86);
+      persist(); syncForm(); toast('📷 Foto aplicada');
+    };
+    im.src = rd.result;
+  };
+  rd.readAsDataURL(f);
+});
+
+/* presets */
+function refreshPresets(sel) {
+  const s = $('presetSel'); s.innerHTML = '';
+  Object.keys(presets).forEach(n => { const o = document.createElement('option'); o.textContent = n; s.appendChild(o); });
+  if (sel && presets[sel]) s.value = sel;
+}
+function presetSave() {
+  const name = $('presetName').value.trim() || $('presetSel').value;
+  if (!name) return toast('Dá um nome pro preset');
+  presets[name] = clone(cfg);
+  if (lsSet('gt_presets', presets)) { refreshPresets(name); $('presetName').value = ''; toast('💾 Preset "' + name + '" salvo'); }
+}
+function presetLoad() {
+  const n = $('presetSel').value; if (!n || !presets[n]) return;
+  cfg = mergeCfg(clone(presets[n])); persist(); syncForm(); restartMatch(); toast('📂 Carregado: ' + n);
+}
+function presetDelete() {
+  const n = $('presetSel').value; if (!n) return;
+  if (!confirm('Apagar o preset "' + n + '"?')) return;
+  delete presets[n]; lsSet('gt_presets', presets); refreshPresets();
+}
+function presetExport() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(presets)], { type: 'application/json' }));
+  a.download = 'presets-guerra-de-times.json'; a.click();
+}
+$('presetIn').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { try { const o = JSON.parse(rd.result); Object.keys(o).forEach(k => presets[k] = mergeCfg(o[k])); lsSet('gt_presets', presets); refreshPresets(); toast('⬆ Presets importados'); } catch (err) { toast('Arquivo inválido'); } };
+  rd.readAsText(f);
+});
+
+const panel = $('panel'), gear = $('gear');
+const togglePanel = () => panel.classList.toggle('open');
+gear.onclick = togglePanel;
+let idleT; addEventListener('mousemove', () => { gear.classList.remove('hide'); clearTimeout(idleT); idleT = setTimeout(() => { if (!panel.classList.contains('open')) gear.classList.add('hide'); }, 3000); });
+let toastT; function toast(m) { const t = $('toast'); t.textContent = m; t.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => t.style.opacity = 0, 2200); }
+
+/* ============================  ESTADO DO JOGO  ============================ */
+const cv = $('c'), ctx = cv.getContext('2d');
+const W = 720, H = 1280;
+const players = new Map();
+let phase = 'lobby', phaseT = performance.now(), phaseDur = cfg.lobby;
+let round = 1, wins = [0, 0], v = 0, dv = 0, roundWinner = -1, matchWinner = -1;
+let fury = { team: -1, until: 0, next: 0 }, overtime = false, lastT = performance.now();
+let floaters = [], confetti = [], feed = [], pulse = [0, 0], connected = false;
+const now = () => performance.now();
+const need = () => Math.ceil(cfg.bestOf / 2);
+const T = i => cfg.teams[i];
+const members = i => [...players.values()].filter(p => p.team === i);
+const say = s => { feed.unshift({ s, t: now() }); if (feed.length > 6) feed.pop(); };
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+const imgs = new Map();
+function getImg(url) {
+  if (!url) return null;
+  let im = imgs.get(url);
+  if (!im) { im = new Image(); im.ok = false; im.onload = () => im.ok = true; im.src = url; imgs.set(url, im); }
+  return im.ok ? im : null;
+}
+const hueOf = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const clip = (s, n) => String(s).length > n ? String(s).slice(0, n - 1) + '…' : String(s);
+
+function setPhase(name, sec) { phase = name; phaseT = now(); phaseDur = sec / SP; }
+function restartMatch() {
+  wins = [0, 0]; round = 1; v = 0; dv = 0; roundWinner = matchWinner = -1; overtime = false;
+  for (const p of players.values()) p.pts = 0;
+  setPhase('lobby', cfg.lobby);
+}
+function resetLive() { liveWins = [0, 0]; lsSet('gt_live', liveWins); toast('Placar da live zerado'); }
+function skipPhase() { phaseT = now() - phaseDur * 1000 - 1; }
+
+function endRound(team) {
+  roundWinner = team; wins[team]++;
+  say('🏁 ' + T(team).name + ' levou o round ' + round);
+  boom(T(team).color);
+  if (wins[team] >= need()) { matchWinner = team; liveWins[team]++; lsSet('gt_live', liveWins); setPhase('matchEnd', 14); boom(T(team).color); }
+  else setPhase('roundEnd', 6);
+}
+function tick(t) {
+  const dt = Math.min(.2, (t - lastT) / 1000); lastT = t;
+  const el = (t - phaseT) / 1000;
+  if (phase === 'round') {
+    // gravidade: o placar tende a voltar pro meio
+    if (v !== 0) { const s = Math.sign(v); v -= s * .6 * dt; if (Math.sign(v) !== s) v = 0; }
+    if (cfg.fury && t > fury.next && t > fury.until) {
+      const beh = v > 2 ? 1 : v < -2 ? 0 : Math.random() < .5 ? 0 : 1;
+      fury = { team: beh, until: t + 10000 / SP, next: t + (25 + Math.random() * 20) * 1000 / SP };
+      say('⚡ FÚRIA do ' + T(beh).name + '! pontos x2');
+    }
+  }
+  if (el < phaseDur) return;
+  if (phase === 'lobby') { for (const p of players.values()) p.pts = 0; setPhase('intro', 4); }
+  else if (phase === 'intro') { setPhase('round', cfg.roundTime); overtime = false; fury = { team: -1, until: 0, next: t + (18 + Math.random() * 12) * 1000 / SP }; }
+  else if (phase === 'round') {
+    if (Math.abs(v) < .5) { phaseDur += 20 / SP; overtime = true; say('⏱ Prorrogação! Empate'); }
+    else endRound(v > 0 ? 0 : 1);
+  }
+  else if (phase === 'roundEnd') { round++; v = 0; dv = 0; setPhase('intro', 4); }
+  else if (phase === 'matchEnd') restartMatch();
+}
+function boom(color) {
+  for (let i = 0; i < 150; i++) confetti.push({ x: W / 2, y: 560, vx: (Math.random() - .5) * 20, vy: -Math.random() * 20 - 4,
+    c: Math.random() < .6 ? color : `hsl(${Math.random() * 360},90%,65%)`, s: 6 + Math.random() * 8, r: Math.random() * 6 });
+}
+
+/* ---------- pontos ---------- */
+function push(p, amount, label) {
+  if (phase !== 'round' || p.team < 0) return;
+  const t = now(), tm = p.team, other = members(1 - tm).length, mine = members(tm).length;
+  let mult = 1;
+  if (cfg.balance) mult *= Math.max(.6, Math.min(1.6, Math.sqrt((other + 1) / (mine + 1))));
+  if (fury.team === tm && t < fury.until) mult *= 2;
+  v += amount * mult * (tm === 0 ? 1 : -1);
+  v = Math.max(-cfg.target, Math.min(cfg.target, v));
+  p.pts += amount; pulse[tm] = t;
+  if (floaters.length < 40) floaters.push({ tm, x: (tm === 0 ? 70 : 440) + Math.random() * 190, y: 880 - Math.random() * 60, t0: t, p, label: label || '+' + (Math.round(amount * 10) / 10) });
+  if (Math.abs(v) >= cfg.target) endRound(v > 0 ? 0 : 1);
+}
+
+/* ============================  EVENTOS DO TIKTOK  ============================ */
+function userOf(d) {
+  return { id: d.uniqueId || d.userId || d.nickname, name: d.nickname || d.uniqueId,
+    pic: d.profilePictureUrl || (d.profilePicture && d.profilePicture.url && d.profilePicture.url[0]) || '' };
+}
+function teamFromText(text) {
+  const raw = String(text || '').trim();
+  const toks = norm(raw).split(/[^a-z0-9]+/).filter(Boolean);
+  for (let i = 0; i < 2; i++) {
+    const c = norm(T(i).cmd).replace(/[^a-z0-9]/g, '');
+    if (c && toks.includes(c)) return i;
+  }
+  const m = raw.match(/^!\s*([12])\b/); if (m) return +m[1] - 1;
+  return null;
+}
+function ensure(u) {
+  if (!u.id) return null;
+  let p = players.get(u.id);
+  if (!p) { if (players.size > 800) return null; p = { id: u.id, name: u.name || u.id, pic: u.pic || '', hue: hueOf(u.id), team: -1, pts: 0, lastC: 0 }; players.set(u.id, p); }
+  else if (u.pic && !p.pic) p.pic = u.pic;
+  return p;
+}
+function assign(p, want) {
+  const canSwitch = ['lobby', 'roundEnd', 'matchEnd'].includes(phase);
+  if (want !== null && want !== undefined) {
+    if (p.team === -1 || (p.team !== want && canSwitch)) { p.team = want; say('➡️ ' + p.name + ' → ' + T(want).name); }
+  } else if (p.team === -1 && cfg.auto) {
+    const a = members(0).length, b = members(1).length;
+    p.team = a < b ? 0 : b < a ? 1 : (Math.random() < .5 ? 0 : 1);
+    say('➡️ ' + p.name + ' → ' + T(p.team).name);
+  }
+}
+function handle(msg) {
+  const ev = msg.event, d = msg.data || {};
+  if (!['chat', 'gift', 'like', 'follow', 'share'].includes(ev)) return;
+  const p = ensure(userOf(d)); if (!p) return;
+  const t = now();
+  if (ev === 'chat') {
+    assign(p, teamFromText(d.comment));
+    if (p.team < 0) return;
+    if (t - p.lastC >= 500) { p.lastC = t; push(p, cfg.pComment); }
+  } else {
+    assign(p, null); if (p.team < 0) return;
+    if (ev === 'like') push(p, (d.likeCount || 1) * cfg.pLike, '❤️');
+    else if (ev === 'gift') {
+      if (d.giftType === 1 && d.repeatEnd === false) return;
+      const dia = (d.diamondCount || 1) * (d.repeatCount || 1);
+      say('🎁 ' + p.name + ' mandou ' + (d.giftName || 'presente') + ' pro ' + T(p.team).name);
+      push(p, Math.max(5, dia * cfg.pGiftDia), '🎁');
+    }
+    else if (ev === 'follow') { say('➕ ' + p.name + ' seguiu!'); push(p, cfg.pFollow, '➕'); }
+    else if (ev === 'share') { push(p, cfg.pShare, '↗️'); }
+  }
+}
+let ws;
+function connect() {
+  try { ws = new WebSocket(WS_URL); } catch (e) { return setTimeout(connect, 3000); }
+  ws.onopen = () => connected = true;
+  ws.onclose = () => { connected = false; setTimeout(connect, 3000); };
+  ws.onerror = () => { try { ws.close(); } catch (e) {} };
+  ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch (err) {} };
+}
+connect();
+
+/* ---------- modo teste ---------- */
+const NAMES = ['Ana','Bruno','Carla','Dudu','Fer','Gabi','Hugo','Isa','João','Kaká','Lari','Marcos','Nanda','Otávio','Paty','Rafa','Sam','Tati','Vini','Yuri','Zé'];
+const Test = {
+  timer: null,
+  viewers(n) { for (let i = 0; i < n; i++) { const nm = NAMES[Math.random() * NAMES.length | 0] + (Math.random() * 999 | 0);
+    handle({ event: 'chat', data: { uniqueId: nm.toLowerCase(), nickname: nm, comment: Math.random() < .5 ? '!' + T(Math.random() < .5 ? 0 : 1).cmd : 'oi' } }); } },
+  rand() { const a = [...players.values()]; return a[Math.random() * a.length | 0]; },
+  auto() {
+    const b = $('btnAuto');
+    if (this.timer) { clearInterval(this.timer); this.timer = null; b.textContent = 'Chat automático: OFF'; return; }
+    b.textContent = 'Chat automático: ON';
+    this.timer = setInterval(() => {
+      if (players.size < 20) this.viewers(8);
+      for (let i = 0; i < 6; i++) { const p = this.rand(); if (p) handle({ event: 'chat', data: { uniqueId: p.id, nickname: p.name, comment: 'vai!' } }); }
+      if (Math.random() < .1) this.gift();
+    }, 400);
+  },
+  gift() { const p = this.rand(); if (p) handle({ event: 'gift', data: { uniqueId: p.id, nickname: p.name, giftName: 'Rose', diamondCount: 1 + (Math.random() * 60 | 0), repeatCount: 1, giftType: 0 } }); },
+  likes() { for (const p of players.values()) handle({ event: 'like', data: { uniqueId: p.id, nickname: p.name, likeCount: 8 } }); }
+};
+addEventListener('keydown', e => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) { if (e.key === 'Escape') document.activeElement.blur(); return; }
+  if (e.key === 'e' || e.key === 'E') togglePanel();
+  if (e.code === 'Space') { e.preventDefault(); skipPhase(); }
+});
+
+/* ============================  DESENHO  ============================ */
+function txt(s, x, y, size, color = '#fff', align = 'center', weight = '800', maxW = 0) {
+  const fnt = z => `${weight} ${z}px system-ui,"Segoe UI",Roboto,"Apple Color Emoji","Segoe UI Emoji",sans-serif`;
+  ctx.font = fnt(size);
+  if (maxW) { const w = ctx.measureText(s).width; if (w > maxW) { size = Math.max(12, size * maxW / w); ctx.font = fnt(size); } }
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(3, size / 6); ctx.strokeStyle = '#000b'; ctx.lineJoin = 'round';
+  ctx.strokeText(s, x, y); ctx.fillStyle = color; ctx.fillText(s, x, y);
+}
+function rr(x, y, w, h, r, fill, stroke, lw = 3) {
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+}
+function teamFace(i, x, y, r) {
+  const tm = T(i), t = now();
+  const k = 1 + .12 * Math.max(0, 1 - (t - pulse[i]) / 220);
+  r *= k;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r + 2, 0, 7); ctx.fillStyle = tm.color; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r - 2, 0, 7); ctx.clip();
+  const im = getImg(tm.photo);
+  if (im) ctx.drawImage(im, x - r, y - r, r * 2, r * 2);
+  else { ctx.fillStyle = tm.color; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+  ctx.restore();
+  if (!im) txt(tm.emoji || (tm.name[0] || '?'), x, y + 2, r * 1.1);
+}
+function userFace(p, x, y, r, color) {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, r + 2, 0, 7); ctx.fillStyle = color; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.clip();
+  const im = getImg(p.pic);
+  if (im) ctx.drawImage(im, x - r, y - r, r * 2, r * 2);
+  else { ctx.fillStyle = `hsl(${p.hue},65%,50%)`; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+  ctx.restore();
+  if (!im) txt((p.name[0] || '?').toUpperCase(), x, y + 1, r * 1.1);
+}
+
+const AR = { x: 30, y: 330, w: 660, h: 600 };
+function drawHeader(t) {
+  txt(clip(cfg.title, 24).toUpperCase(), W / 2, 44, 40, '#ffd23f');
+  txt(clip(cfg.subtitle, 44), W / 2, 90, 22, '#ffffffcc', 'center', '600');
+  const label = phase === 'lobby' ? 'ESCOLHA SEU TIME' : phase === 'matchEnd' ? 'FIM DA PARTIDA' :
+    `MELHOR DE ${cfg.bestOf}  •  ROUND ${round}` + (overtime ? '  •  PRORROGAÇÃO' : '');
+  txt(label, W / 2, 128, 21, '#9aa4ff');
+  // banners dos times
+  [0, 1].forEach(i => {
+    const left = i === 0, bx = left ? 30 : 400;
+    rr(bx, 150, 290, 150, 20, T(i).color + '30', T(i).color + 'aa');
+    const fx = left ? 86 : 634;
+    teamFace(i, fx, 225, 46);
+    const tx = left ? 146 : 574, al = left ? 'left' : 'right';
+    txt(clip(T(i).name, 24), tx, 196, 26, '#fff', al, '800', 165);
+    txt(`👥 ${members(i).length}`, tx, 232, 21, '#ffffffcc', al, '700');
+    // pips de rounds vencidos
+    for (let k = 0; k < need(); k++) {
+      const px = left ? 156 + k * 30 : 564 - k * 30;
+      ctx.beginPath(); ctx.arc(px, 268, 10, 0, 7);
+      ctx.fillStyle = k < wins[i] ? '#ffd23f' : '#ffffff25'; ctx.fill();
+      ctx.strokeStyle = '#fff6'; ctx.lineWidth = 2; ctx.stroke();
+    }
+  });
+  // centro: tempo
+  const left = Math.max(0, phaseDur - (t - phaseT) / 1000);
+  let big = '';
+  if (phase === 'round') big = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+  else if (phase === 'lobby') big = Math.ceil(left) + 's';
+  else big = 'VS';
+  txt(big, W / 2, 224, phase === 'round' || phase === 'lobby' ? 30 : 38, left < 10 && phase === 'round' ? '#ff4d6a' : '#fff');
+  txt('⚔️', W / 2, 270, 26);
+}
+
+function overlay(main, sub, color, idx) {
+  ctx.fillStyle = '#000b'; ctx.fillRect(AR.x, AR.y + 150, AR.w, 300);
+  if (idx !== undefined) teamFace(idx, W / 2, AR.y + 250, 70);
+  txt(main, W / 2, AR.y + (idx !== undefined ? 360 : 280), 40, color || '#ffd23f');
+  txt(sub, W / 2, AR.y + (idx !== undefined ? 410 : 330), 24, '#fff', 'center', '600');
+}
+
+function drawArena(t) {
+  const sk = 46, tgt = Math.max(1, cfg.target);
+  dv += (v - dv) * .12;
+  const share = Math.max(.1, Math.min(.9, .5 + .5 * dv / tgt));
+  const xs = AR.x + AR.w * share;
+  const c0 = T(0).color, c1 = T(1).color;
+  ctx.save();
+  ctx.beginPath(); ctx.roundRect(AR.x, AR.y, AR.w, AR.h, 26); ctx.clip();
+  ctx.fillStyle = '#0d0d1c'; ctx.fillRect(AR.x, AR.y, AR.w, AR.h);
+  // território 1
+  let g = ctx.createLinearGradient(AR.x, 0, xs, 0); g.addColorStop(0, c0 + '55'); g.addColorStop(1, c0 + 'cc');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(AR.x, AR.y); ctx.lineTo(xs + sk, AR.y); ctx.lineTo(xs - sk, AR.y + AR.h); ctx.lineTo(AR.x, AR.y + AR.h); ctx.fill();
+  // território 2
+  g = ctx.createLinearGradient(xs, 0, AR.x + AR.w, 0); g.addColorStop(0, c1 + 'cc'); g.addColorStop(1, c1 + '55');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(xs + sk, AR.y); ctx.lineTo(AR.x + AR.w, AR.y); ctx.lineTo(AR.x + AR.w, AR.y + AR.h); ctx.lineTo(xs - sk, AR.y + AR.h); ctx.fill();
+  // linha de frente
+  ctx.shadowColor = '#fff'; ctx.shadowBlur = 24; ctx.strokeStyle = '#fff'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(xs + sk, AR.y); ctx.lineTo(xs - sk, AR.y + AR.h); ctx.stroke(); ctx.shadowBlur = 0;
+  // faíscas
+  for (let i = 0; i < 6; i++) { const yy = AR.y + ((t / 7 + i * 100) % AR.h); const xx = xs + sk - (yy - AR.y) * (2 * sk / AR.h) + Math.sin(t / 80 + i) * 8; txt('✨', xx, yy, 18); }
+  // fotos dos times
+  const lw = xs - AR.x, rw = AR.x + AR.w - xs;
+  teamFace(0, AR.x + lw / 2 - 10, AR.y + 230, Math.min(lw * .36, 118));
+  teamFace(1, xs + rw / 2 + 10, AR.y + 230, Math.min(rw * .36, 118));
+  txt(clip(T(0).name, 24), AR.x + lw / 2 - 10, AR.y + 380, 28, '#fff', 'center', '800', lw - 30);
+  txt(clip(T(1).name, 24), xs + rw / 2 + 10, AR.y + 380, 28, '#fff', 'center', '800', rw - 30);
+  txt(Math.round(share * 100) + '%', AR.x + lw / 2 - 10, AR.y + 450, 60, '#fff');
+  txt(Math.round((1 - share) * 100) + '%', xs + rw / 2 + 10, AR.y + 450, 60, '#fff');
+  // floaters
+  floaters = floaters.filter(f => t - f.t0 < 1800);
+  for (const f of floaters) {
+    const k = (t - f.t0) / 1800, y = f.y - k * 260;
+    ctx.globalAlpha = 1 - k * k;
+    userFace(f.p, f.x, y, 15, T(f.tm).color);
+    txt(f.label, f.x + 44, y, 20, '#fff', 'left'); ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  rr(AR.x, AR.y, AR.w, AR.h, 26, null, '#ffffff33', 3);
+  // fúria
+  if (phase === 'round' && t < fury.until) {
+    const a = .75 + .25 * Math.sin(t / 90);
+    ctx.globalAlpha = a; rr(AR.x + 60, AR.y + 20, AR.w - 120, 52, 26, T(fury.team).color, '#fff'); ctx.globalAlpha = 1;
+    txt(`⚡ FÚRIA ${clip(T(fury.team).name, 12).toUpperCase()} x2 ⚡`, W / 2, AR.y + 47, 24);
+  }
+  // overlays por fase
+  if (phase === 'lobby') {
+    ctx.fillStyle = '#000a'; ctx.fillRect(AR.x, AR.y + 470, AR.w, 120);
+    txt(`Digite !${norm(T(0).cmd)} ou !${norm(T(1).cmd)}`, W / 2, AR.y + 505, 30, '#ffd23f');
+    txt('ou só comenta que o time é sorteado!', W / 2, AR.y + 552, 22, '#fff', 'center', '600');
+  } else if (phase === 'intro') {
+    const n = Math.max(1, Math.ceil(phaseDur - (t - phaseT) / 1000));
+    overlay(`ROUND ${round}`, n > 1 ? `Prepara… ${n - 1 || ''}` : 'VALENDO!', '#ffd23f');
+  } else if (phase === 'roundEnd') {
+    overlay(clip(T(roundWinner).name, 14).toUpperCase() + ' VENCEU!', `Round ${round} • placar ${wins[0]} × ${wins[1]}`, T(roundWinner).color, roundWinner);
+  } else if (phase === 'matchEnd') {
+    overlay('🏆 ' + clip(T(matchWinner).name, 13).toUpperCase() + ' CAMPEÃO! 🏆', `Placar final ${wins[0]} × ${wins[1]}`, '#ffd23f', matchWinner);
+  }
+}
+
+function drawBottom(t) {
+  ctx.fillStyle = '#0009'; ctx.fillRect(0, 950, W, 330);
+  [0, 1].forEach(i => {
+    const x = i === 0 ? 30 : 380;
+    txt('⭐ MVPs ' + clip(T(i).name, 24), x, 978, 21, T(i).color, 'left', '800', 300);
+    const top = members(i).sort((a, b) => b.pts - a.pts).slice(0, 5);
+    top.forEach((p, k) => {
+      userFace(p, x + 14, 1018 + k * 36, 14, T(i).color);
+      txt(clip(p.name, 11), x + 38, 1018 + k * 36, 19, '#fff', 'left', '700');
+      txt(String(Math.round(p.pts)), x + 305, 1018 + k * 36, 19, '#7dffb0', 'right');
+    });
+    if (!top.length) txt('ninguém ainda…', x, 1018, 18, '#ffffff77', 'left', '600');
+  });
+  ctx.fillStyle = '#ffffff22'; ctx.fillRect(358, 962, 2, 220);
+  rr(30, 1206, 660, 38, 12, '#ffffff12');
+  txt(`💬 Comenta = ponto   ❤️ Curte = turbo   🎁 Presente = megaforça`, W / 2, 1225, 19, '#fff', 'center', '700');
+  txt(`🏅 Placar da live:  ${clip(T(0).name, 14)} ${liveWins[0]}  ×  ${liveWins[1]} ${clip(T(1).name, 14)}`, W / 2, 1262, 20, '#ffd23f', 'center', '700', 650);
+  // feed mais recente
+  feed = feed.filter(f => t - f.t < 6000);
+  if (feed[0]) { ctx.globalAlpha = Math.min(1, (6000 - (t - feed[0].t)) / 600); txt(clip(feed[0].s, 44), W / 2, 1190, 19, '#fff', 'center', '600'); ctx.globalAlpha = 1; }
+}
+
+function frame() {
+  const t = now(); tick(t);
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#18103a'); g.addColorStop(1, '#08142b');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  drawHeader(t); drawArena(t); drawBottom(t);
+  confetti = confetti.filter(c => c.y < H + 20);
+  for (const c of confetti) { c.x += c.vx; c.y += c.vy; c.vy += .5; c.vx *= .99; c.r += .2;
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.fillStyle = c.c; ctx.fillRect(-c.s / 2, -c.s / 4, c.s, c.s / 2); ctx.restore(); }
+  ctx.beginPath(); ctx.arc(W - 12, 12, 6, 0, 7); ctx.fillStyle = connected ? '#2ecc71' : '#e74c3c'; ctx.fill();
+  requestAnimationFrame(frame);
+}
+syncForm(); refreshPresets();
+setPhase('lobby', cfg.lobby);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
